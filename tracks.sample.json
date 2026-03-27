@@ -1,0 +1,14 @@
+[
+  {
+    "id": "sample-1",
+    "title": "Replace with real track title",
+    "creator": "Replace with real artist",
+    "url": "https://archive.org/download/mp3-com-rescue-barge-I/sample.mp3"
+  },
+  {
+    "id": "sample-2",
+    "title": "Another Track",
+    "creator": "Another Artist",
+    "url": "https://archive.org/download/mp3-com-rescue-barge-I/sample2.mp3"
+  }
+]

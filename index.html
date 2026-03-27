@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MP3.com Infinite Radio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <h1>📻 MP3.com Infinite Radio</h1>
+    <p class="subtitle">430,000 forgotten songs. One random station.</p>
+
+    <div id="now-playing">
+      <div id="track-title">Loading catalog…</div>
+      <div id="track-artist"></div>
+    </div>
+
+    <audio id="audio" controls></audio>
+
+    <div id="controls">
+      <button id="btn-play">⏯ Play / Pause</button>
+      <button id="btn-skip">⏭ Skip</button>
+    </div>
+
+    <div id="history">
+      <h2>Recently Played</h2>
+      <ul id="history-list"></ul>
+    </div>
+
+    <footer>
+      All music hosted by <a href="https://archive.org/details/mp3-com-rescue-barge" target="_blank">Internet Archive – MP3.com Rescue Barge</a>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

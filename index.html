@@ -5,11 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MP3.com Infinite Radio</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#00e5ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MP3 Radio" />
 </head>
 <body>
   <div id="app">
     <h1>📻 MP3.com Infinite Radio</h1>
-    <p class="subtitle">430,000 forgotten songs. One random station.</p>
+    <p class="subtitle">257,090 forgotten songs. One random station.</p>
 
     <div id="now-playing">
       <div id="track-title">Loading catalog…</div>
@@ -34,5 +39,14 @@
   </div>
 
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/mp3com-radio/sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.warn('SW failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>

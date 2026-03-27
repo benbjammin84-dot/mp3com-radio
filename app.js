@@ -1,4 +1,4 @@
-const CATALOG_URL = 'tracks.sample.json';
+const CATALOG_URL = 'tracks.json';
 const QUEUE_SIZE = 50;
 
 let catalog = [];
@@ -63,7 +63,7 @@ function addToHistory(track) {
   for (const t of historyList) {
     const li = document.createElement('li');
     const a = document.createElement('a');
-    a.textContent = `${t.creator || 'Unknown'} – ${t.title || 'Untitled'}`;
+    a.textContent = `${t.creator || 'Unknown'} \u2013 ${t.title || 'Untitled'}`;
     a.href = t.url;
     a.target = '_blank';
     li.appendChild(a);

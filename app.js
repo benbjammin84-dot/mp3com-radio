@@ -73,6 +73,21 @@ function addToHistory(track) {
 
 audioEl.addEventListener('ended', playNext);
 
+// Safety net: if playback stalls or finishes without firing "ended", skip ahead
+setInterval(() => {
+  if (!audioEl.src) return;
+
+  const duration = audioEl.duration || 0;
+  const current  = audioEl.currentTime || 0;
+
+  const nearEnd = duration > 0 && current > duration - 3;
+  const stuck   = audioEl.paused && current > 0;
+
+  if (nearEnd || stuck) {
+    playNext();
+  }
+}, 8000); // check about every 8 seconds
+
 btnPlay.addEventListener('click', () => {
   if (audioEl.paused) audioEl.play().catch(() => {});
   else audioEl.pause();

@@ -1,12 +1,13 @@
 const CATALOG_URL = 'tracks.json';
 const QUEUE_SIZE = 50;
-const PROXY_URL = 'http://localhost:8888/stream';
-const MAX_RETRIES = 3; // skip after this many failures in a row
+const CF_PROXY = 'https://summer-sound-bd21.benjaminphinisee.workers.dev';
+const LOCAL_PROXY = 'http://localhost:8888/stream';
+const MAX_RETRIES = 3;
 
 let catalog = [];
 let queue = [];
 let historyList = [];
-let proxyAvailable = false;
+let localProxyAvailable = false;
 let consecutiveFailures = 0;
 
 const audioEl = document.getElementById('audio');
@@ -17,33 +18,33 @@ const btnPlay = document.getElementById('btn-play');
 const btnSkip = document.getElementById('btn-skip');
 
 /**
- * Check if the Nice TV local proxy is running.
+ * Check if local proxy is running (optional, for local dev).
  */
-async function checkProxy() {
+async function checkLocalProxy() {
   try {
     const res = await fetch('http://localhost:8888/health', { signal: AbortSignal.timeout(2000) });
     const data = await res.json();
-    proxyAvailable = data.status === 'ok';
+    localProxyAvailable = data.status === 'ok';
   } catch {
-    proxyAvailable = false;
+    localProxyAvailable = false;
   }
-  // Re-check every 60 seconds
-  setTimeout(checkProxy, 60000);
+  setTimeout(checkLocalProxy, 60000);
 }
 
 /**
- * Get the playback URL — through proxy if available, direct otherwise.
+ * Get playback URL:
+ * 1. Local proxy if running (fastest for local dev)
+ * 2. Cloudflare Worker (always-on, handles CORS + redirects + 401s)
  */
 function getPlayUrl(originalUrl) {
-  if (proxyAvailable) {
-    return `${PROXY_URL}?url=${encodeURIComponent(originalUrl)}`;
+  if (localProxyAvailable) {
+    return `${LOCAL_PROXY}?url=${encodeURIComponent(originalUrl)}`;
   }
-  return originalUrl;
+  return `${CF_PROXY}/?url=${encodeURIComponent(originalUrl)}`;
 }
 
 async function init() {
-  // Check proxy first
-  await checkProxy();
+  await checkLocalProxy();
 
   try {
     const res = await fetch(CATALOG_URL);
@@ -78,15 +79,13 @@ function playNext() {
   refillQueue();
 
   audioEl.src = getPlayUrl(track.url);
-  audioEl._originalUrl = track.url; // keep original for retry logic
+  audioEl._originalUrl = track.url;
   audioEl._currentTrack = track;
   titleEl.textContent = track.title || 'Untitled';
   artistEl.textContent = track.creator || 'Unknown Artist';
 
   addToHistory(track);
-  audioEl.play().catch(() => {
-    // autoplay blocked, user needs to interact first
-  });
+  audioEl.play().catch(() => {});
 }
 
 function addToHistory(track) {
@@ -110,37 +109,23 @@ audioEl.addEventListener('ended', () => {
   playNext();
 });
 
-// Handle load errors — skip to next track on 401/403/network failure
 audioEl.addEventListener('error', () => {
   console.warn(`Failed to load: ${audioEl._currentTrack?.title || 'unknown'}`);
   consecutiveFailures++;
-
   if (consecutiveFailures >= MAX_RETRIES) {
-    // If proxy isn't running and we're getting repeated failures, note it
-    if (!proxyAvailable) {
-      titleEl.textContent = 'Streams blocked — start the proxy (node proxy.js)';
-      artistEl.textContent = 'Run the Nice TV proxy on port 8888 for best results';
-      return;
-    }
+    titleEl.textContent = 'Skipping troubled tracks...';
+    artistEl.textContent = 'Cloudflare proxy active — retrying';
   }
-
-  // Auto-skip to next track
   setTimeout(playNext, 500);
 });
 
-// Safety net: if playback stalls or finishes without firing "ended", skip ahead
 setInterval(() => {
   if (!audioEl.src) return;
-
   const duration = audioEl.duration || 0;
-  const current  = audioEl.currentTime || 0;
-
+  const current = audioEl.currentTime || 0;
   const nearEnd = duration > 0 && current > duration - 3;
-  const stuck   = audioEl.paused && current > 0 && consecutiveFailures === 0;
-
-  if (nearEnd || stuck) {
-    playNext();
-  }
+  const stuck = audioEl.paused && current > 0 && consecutiveFailures === 0;
+  if (nearEnd || stuck) playNext();
 }, 8000);
 
 btnPlay.addEventListener('click', () => {

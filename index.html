@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00e5ff" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MP3 Radio" />
@@ -21,7 +22,7 @@
       <div id="track-artist"></div>
     </div>
 
-    <audio id="audio" controls></audio>
+    <audio id="audio" controls preload="auto" autoplay></audio>
 
     <div id="controls">
       <button id="btn-play">⏯ Play / Pause</button>

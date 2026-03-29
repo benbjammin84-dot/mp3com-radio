@@ -1,13 +1,10 @@
 const CATALOG_URL = 'tracks.json';
 const QUEUE_SIZE = 50;
-const CF_PROXY = 'https://summer-sound-bd21.benjaminphinisee.workers.dev';
-const LOCAL_PROXY = 'http://localhost:8888/stream';
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 
 let catalog = [];
 let queue = [];
 let historyList = [];
-let localProxyAvailable = false;
 let consecutiveFailures = 0;
 
 const audioEl = document.getElementById('audio');
@@ -17,35 +14,7 @@ const historyEl = document.getElementById('history-list');
 const btnPlay = document.getElementById('btn-play');
 const btnSkip = document.getElementById('btn-skip');
 
-/**
- * Check if local proxy is running (optional, for local dev).
- */
-async function checkLocalProxy() {
-  try {
-    const res = await fetch('http://localhost:8888/health', { signal: AbortSignal.timeout(2000) });
-    const data = await res.json();
-    localProxyAvailable = data.status === 'ok';
-  } catch {
-    localProxyAvailable = false;
-  }
-  setTimeout(checkLocalProxy, 60000);
-}
-
-/**
- * Get playback URL:
- * 1. Local proxy if running (fastest for local dev)
- * 2. Cloudflare Worker (always-on, handles CORS + redirects + 401s)
- */
-function getPlayUrl(originalUrl) {
-  if (localProxyAvailable) {
-    return `${LOCAL_PROXY}?url=${encodeURIComponent(originalUrl)}`;
-  }
-  return `${CF_PROXY}/?url=${encodeURIComponent(originalUrl)}`;
-}
-
 async function init() {
-  await checkLocalProxy();
-
   try {
     const res = await fetch(CATALOG_URL);
     catalog = await res.json();
@@ -78,13 +47,14 @@ function playNext() {
   if (!track) return;
   refillQueue();
 
-  audioEl.src = getPlayUrl(track.url);
-  audioEl._originalUrl = track.url;
+  // Play archive.org directly — their CDN supports CORS on download URLs
+  audioEl.src = track.url;
   audioEl._currentTrack = track;
   titleEl.textContent = track.title || 'Untitled';
   artistEl.textContent = track.creator || 'Unknown Artist';
 
   addToHistory(track);
+  audioEl.load();
   audioEl.play().catch(() => {});
 }
 
@@ -109,24 +79,41 @@ audioEl.addEventListener('ended', () => {
   playNext();
 });
 
-audioEl.addEventListener('error', () => {
-  console.warn(`Failed to load: ${audioEl._currentTrack?.title || 'unknown'}`);
-  consecutiveFailures++;
-  if (consecutiveFailures >= MAX_RETRIES) {
-    titleEl.textContent = 'Skipping troubled tracks...';
-    artistEl.textContent = 'Cloudflare proxy active — retrying';
-  }
-  setTimeout(playNext, 500);
+audioEl.addEventListener('canplay', () => {
+  consecutiveFailures = 0;
 });
 
+audioEl.addEventListener('error', () => {
+  console.warn(`Failed: ${audioEl._currentTrack?.title}`);
+  consecutiveFailures++;
+  if (consecutiveFailures >= MAX_RETRIES) {
+    consecutiveFailures = 0;
+    titleEl.textContent = 'Skipping a few troubled tracks...';
+  }
+  setTimeout(playNext, 800);
+});
+
+// Watchdog: skip if stuck loading too long
+let loadTimeout = null;
+audioEl.addEventListener('waiting', () => {
+  loadTimeout = setTimeout(() => {
+    console.warn('Stuck loading, skipping...');
+    playNext();
+  }, 8000);
+});
+audioEl.addEventListener('playing', () => {
+  if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+  consecutiveFailures = 0;
+});
+
+// Safety net interval
 setInterval(() => {
   if (!audioEl.src) return;
   const duration = audioEl.duration || 0;
   const current = audioEl.currentTime || 0;
   const nearEnd = duration > 0 && current > duration - 3;
-  const stuck = audioEl.paused && current > 0 && consecutiveFailures === 0;
-  if (nearEnd || stuck) playNext();
-}, 8000);
+  if (nearEnd) playNext();
+}, 5000);
 
 btnPlay.addEventListener('click', () => {
   consecutiveFailures = 0;

@@ -1,3 +1,4 @@
+<img width="820" height="631" alt="Screenshot From 2026-04-10 12-24-59" src="https://github.com/user-attachments/assets/4eea2e6a-5a4d-4ebc-978e-992e4bfe8893" />
 # 📻 MP3.com Infinite Radio
 
 A free, open, forever-random music station powered by the [MP3.com Rescue Barge](https://archive.org/details/mp3-com-rescue-barge) collection on Internet Archive.

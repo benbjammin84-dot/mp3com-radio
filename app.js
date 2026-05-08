@@ -6,6 +6,9 @@ let catalog = [];
 let queue = [];
 let historyList = [];
 let consecutiveFailures = 0;
+let offlineMode = false;
+let loadTimeout = null;
+let advancing = false;
 
 const audioEl = document.getElementById('audio');
 const titleEl = document.getElementById('track-title');
@@ -37,17 +40,47 @@ function refillQueue() {
   while (queue.length < QUEUE_SIZE) {
     const idx = Math.floor(Math.random() * catalog.length);
     const track = catalog[idx];
-    if (!recent.has(track.id)) queue.push(track);
+    if (track && !recent.has(track.id) && !queue.some(t => t.id === track.id)) {
+      queue.push(track);
+    }
   }
 }
 
+function stopWatchdog() {
+  if (loadTimeout) {
+    clearTimeout(loadTimeout);
+    loadTimeout = null;
+  }
+}
+
+function scheduleNext(reason = '') {
+  if (advancing) return;
+  if (offlineMode) {
+    titleEl.textContent = 'Offline. Waiting for connection...';
+    return;
+  }
+
+  advancing = true;
+  stopWatchdog();
+  setTimeout(() => {
+    advancing = false;
+    playNext();
+  }, 800);
+}
+
 function playNext() {
+  if (offlineMode) {
+    titleEl.textContent = 'Offline. Waiting for connection...';
+    return;
+  }
+
   if (queue.length === 0) refillQueue();
   const track = queue.shift();
   if (!track) return;
-  refillQueue();
 
-  // Play archive.org directly — their CDN supports CORS on download URLs
+  refillQueue();
+  stopWatchdog();
+
   audioEl.src = track.url;
   audioEl._currentTrack = track;
   titleEl.textContent = track.title || 'Untitled';
@@ -55,7 +88,9 @@ function playNext() {
 
   addToHistory(track);
   audioEl.load();
-  audioEl.play().catch(() => {});
+  audioEl.play().catch(() => {
+    if (navigator.onLine) scheduleNext('play failed');
+  });
 }
 
 function addToHistory(track) {
@@ -76,46 +111,86 @@ function addToHistory(track) {
 
 audioEl.addEventListener('ended', () => {
   consecutiveFailures = 0;
-  playNext();
+  scheduleNext('ended');
 });
 
 audioEl.addEventListener('canplay', () => {
   consecutiveFailures = 0;
+  stopWatchdog();
 });
 
 audioEl.addEventListener('error', () => {
   console.warn(`Failed: ${audioEl._currentTrack?.title}`);
   consecutiveFailures++;
+
+  if (!navigator.onLine) {
+    offlineMode = true;
+    stopWatchdog();
+    titleEl.textContent = 'Offline. Waiting for connection...';
+    return;
+  }
+
   if (consecutiveFailures >= MAX_RETRIES) {
     consecutiveFailures = 0;
-    titleEl.textContent = 'Skipping a few troubled tracks...';
+    titleEl.textContent = 'Skipping troubled tracks...';
   }
-  setTimeout(playNext, 800);
+
+  scheduleNext('error');
 });
 
-// Watchdog: skip if stuck loading too long
-let loadTimeout = null;
 audioEl.addEventListener('waiting', () => {
+  if (offlineMode || !navigator.onLine) {
+    offlineMode = true;
+    stopWatchdog();
+    titleEl.textContent = 'Offline. Waiting for connection...';
+    return;
+  }
+
+  stopWatchdog();
   loadTimeout = setTimeout(() => {
     console.warn('Stuck loading, skipping...');
-    playNext();
+    scheduleNext('stuck loading');
   }, 8000);
 });
+
 audioEl.addEventListener('playing', () => {
-  if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+  stopWatchdog();
   consecutiveFailures = 0;
 });
 
-// Safety net interval
+window.addEventListener('online', () => {
+  offlineMode = false;
+  consecutiveFailures = 0;
+  titleEl.textContent = 'Back online. Resuming...';
+  playNext();
+});
+
+window.addEventListener('offline', () => {
+  offlineMode = true;
+  stopWatchdog();
+  audioEl.pause();
+  titleEl.textContent = 'Offline. Waiting for connection...';
+});
+
 setInterval(() => {
-  if (!audioEl.src) return;
+  if (offlineMode) return;
+  if (!audioEl.src || audioEl.paused) return;
+
   const duration = audioEl.duration || 0;
   const current = audioEl.currentTime || 0;
   const nearEnd = duration > 0 && current > duration - 3;
-  if (nearEnd) playNext();
+
+  if (nearEnd && navigator.onLine) {
+    scheduleNext('near end');
+  }
 }, 5000);
 
 btnPlay.addEventListener('click', () => {
+  if (offlineMode) {
+    titleEl.textContent = 'Offline. Waiting for connection...';
+    return;
+  }
+
   consecutiveFailures = 0;
   if (audioEl.paused) audioEl.play().catch(() => {});
   else audioEl.pause();
@@ -124,7 +199,7 @@ btnPlay.addEventListener('click', () => {
 btnSkip.addEventListener('click', () => {
   consecutiveFailures = 0;
   audioEl.pause();
-  playNext();
+  scheduleNext('manual skip');
 });
 
 window.addEventListener('load', init);
